@@ -51,9 +51,9 @@ void draw_rectangle(std::vector<uint32_t> &img, const size_t img_w, const size_t
 }
 int main()
 {
-    const size_t win_w = 512;
+    const size_t win_w = 1024;
     const size_t win_h = 512;
-    std::vector<uint32_t> framebuffer(win_w * win_h, 255); // 初始化为红色
+    std::vector<uint32_t> framebuffer(win_w * win_h, pack_color(255, 255, 255)); // 初始化为红色
     const size_t map_w = 16;                               // 地图宽度
     const size_t map_h = 16;                               // 地图高度
     const char map[] = "0000222222220000"
@@ -88,7 +88,7 @@ int main()
         }
     }
     // 一个地图块在图片里面是一个矩形像素块
-    const size_t rect_w = win_w / map_w;
+    const size_t rect_w = win_w / (map_w*2);
     const size_t rect_h = win_h / map_h;
     // 画出玩家
     draw_rectangle(framebuffer, win_w, win_h, player_x * rect_w, player_y * rect_h, 5, 5, pack_color(255, 255, 255));
@@ -107,19 +107,24 @@ int main()
                            pack_color(0, 255, 255));
         }
     }
-    for(size_t i = 0; i < win_w; ++i){
-        // 画出视野范围, 这里遍历512次是画512条边，这样方便接下来画3d的视野
-        float angle = player_a - sightAngle / 2 + sightAngle * i / (float)win_w;
+    for(size_t i = 0; i < win_w / 2; ++i){
+        // 画出视野范围, 这里遍历512次是画512条边，并且画3d的视野
+        float angle = player_a - sightAngle / 2 + sightAngle * i / (float)(win_w / 2);
         // 画一条玩家的视线图
-        for (float t = 0; t < 20; t += 0.1)
+        for (float t = 0; t < 20; t += 0.05)
         {
             float cx = player_x + t * cos(angle);
             float cy = player_y + t * sin(angle);
-            if (map[(int)cx + int(cy) * map_w] != ' ')
-                break; // 遇到障碍了
             size_t ray_x = cx * rect_w;
             size_t ray_y = cy * rect_h;
-            framebuffer[ray_x + ray_y * win_w] = pack_color(255, 255, 255);
+            if(map[int(cx) + int(cy) * map_w] != ' '){
+                // 视线遇到了墙，要画出3d图像
+                size_t column_height = win_h / t; // 近大远小
+                draw_rectangle(framebuffer, win_w, win_h, win_w/2 + i, win_h / 2 - column_height / 2,
+                1, column_height, pack_color(0, 255, 255));
+                break;
+            }
+            framebuffer[ray_x + ray_y * win_w] = pack_color(160, 160, 160);
         }
     }
     drop_ppm_image("./demo.ppm", framebuffer, win_w, win_h);

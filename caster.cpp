@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cassert>
 #include <cmath>
+#include <sstream>
+#include <iomanip>
 uint32_t pack_color(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255)
 {
     // 一个4 byte的无符号整数，每一个byte表示一个属性
@@ -44,7 +46,9 @@ void draw_rectangle(std::vector<uint32_t> &img, const size_t img_w, const size_t
         {
             size_t cx = x + i;
             size_t cy = y + j;
-            assert(cx < img_w && cy < img_h);
+            if(cx >= img_w || cy >= img_h){
+                continue;
+            }
             img[cx + cy * img_w] = color;
         }
     }
@@ -77,6 +81,12 @@ int main()
     float player_y = 2.345;                   // 玩家y轴坐标
     float player_a = 1.523;                   // 玩家视线和x轴夹角
     const float sightAngle = M_PI / 3; // 视野角度，三分之一pi
+    const size_t ncolors = 10;
+    std::vector<uint32_t>colors(ncolors);
+    for(size_t i = 0;i < ncolors; ++i){
+        // 随机初始化颜色
+        colors[i] = pack_color(rand() % 255, rand() % 255, rand() % 255);
+    }
     for (size_t j = 0; j < win_h; j++)
     { // 初始化颜色变换
         for (size_t i = 0; i < win_w; i++)
@@ -90,43 +100,53 @@ int main()
     // 一个地图块在图片里面是一个矩形像素块
     const size_t rect_w = win_w / (map_w*2);
     const size_t rect_h = win_h / map_h;
-    // 画出玩家
-    draw_rectangle(framebuffer, win_w, win_h, player_x * rect_w, player_y * rect_h, 5, 5, pack_color(255, 255, 255));
-    for (size_t j = 0; j < map_h; j++)
-    {
+    for(size_t frame = 0 ; frame < 360; ++frame){
+        // 画出动画效果，总共有360帧
+        std::stringstream ss;
+        ss << std::setfill('0') << std::setw(5) << frame << ".ppm";
+        player_a += 2*M_PI / 360;
+        // 清空地图
+        framebuffer = std::vector<uint32_t>(win_w* win_h, pack_color(255,255,255));
+        for (size_t j = 0; j < map_h; j++){
         // 画地图
-        for (size_t i = 0; i < map_w; i++)
-        {
-            if (map[i + j * map_w] == ' ')
+            for (size_t i = 0; i < map_w; i++)
             {
-                continue;
+                if (map[i + j * map_w] == ' ')
+                {
+                    continue;
+                }
+                size_t rect_x = i * rect_w;
+                size_t rect_y = j * rect_h;
+                size_t icolor = map[i + j * map_w] - '0';
+                assert(icolor < ncolors);
+                draw_rectangle(framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h,
+                            colors[icolor]);
             }
-            size_t rect_x = i * rect_w;
-            size_t rect_y = j * rect_h;
-            draw_rectangle(framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h,
-                           pack_color(0, 255, 255));
         }
-    }
-    for(size_t i = 0; i < win_w / 2; ++i){
-        // 画出视野范围, 这里遍历512次是画512条边，并且画3d的视野
+        for(size_t i = 0; i < win_w / 2; ++i){
+        // 画出视野范围, 这里遍历512次是为了画512条边，并且画3d的视野
         float angle = player_a - sightAngle / 2 + sightAngle * i / (float)(win_w / 2);
         // 画一条玩家的视线图
-        for (float t = 0; t < 20; t += 0.05)
-        {
-            float cx = player_x + t * cos(angle);
-            float cy = player_y + t * sin(angle);
-            size_t ray_x = cx * rect_w;
-            size_t ray_y = cy * rect_h;
-            if(map[int(cx) + int(cy) * map_w] != ' '){
-                // 视线遇到了墙，要画出3d图像
-                size_t column_height = win_h / t; // 近大远小
-                draw_rectangle(framebuffer, win_w, win_h, win_w/2 + i, win_h / 2 - column_height / 2,
-                1, column_height, pack_color(0, 255, 255));
-                break;
+            for (float t = 0; t < 20; t += 0.01)
+            {
+                float cx = player_x + t * cos(angle);
+                float cy = player_y + t * sin(angle);
+                size_t ray_x = cx * rect_w;
+                size_t ray_y = cy * rect_h;
+                if(map[int(cx) + int(cy) * map_w] != ' '){
+                    // 视线遇到了墙，要画出3d图像
+                    size_t column_height = win_h / (t * cos(angle - player_a)); // 近大远小,使用cosine消除fish eye效应
+                    size_t icolor = map[int(cx) + int(cy) * map_w] - '0';
+                    assert(icolor < ncolors);
+                    draw_rectangle(framebuffer, win_w, win_h, win_w/2 + i, win_h / 2 - column_height / 2,
+                    1, column_height, colors[icolor]);
+                    break;
+                }
+                framebuffer[ray_x + ray_y * win_w] = pack_color(160, 160, 160);
             }
-            framebuffer[ray_x + ray_y * win_w] = pack_color(160, 160, 160);
         }
+        // 采用ss处理字符流,标准化输入格式
+        drop_ppm_image(ss.str(), framebuffer, win_w, win_h);
     }
-    drop_ppm_image("./demo.ppm", framebuffer, win_w, win_h);
     return 0;
 }

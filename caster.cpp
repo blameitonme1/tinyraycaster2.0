@@ -35,7 +35,19 @@ void drop_ppm_image(const std::string filename, const std::vector<uint32_t> &ima
     }
     ofs.close();
 }
-
+std::vector<uint32_t> texture_column(const std::vector<uint32_t> &img, const size_t texsize, const size_t texid, const size_t tex_cnt ,const size_t texcorrd, const size_t column_height){
+    const size_t img_w = texsize* tex_cnt;
+    const size_t img_h = texsize;
+    assert(img.size() == img_w * img_h && texcorrd < texsize && texid < tex_cnt);
+    std::vector<uint32_t> column(column_height);
+    for(size_t y = 0; y < column_height; ++y){
+        // 依次前进，将质地图片对应的那一竖列每一个像素点的颜色复制到column数组
+        size_t pix_x = texid * texsize + texcorrd;
+        size_t pix_y = (y * texsize) / column_height;
+        column[y] = img[pix_x + pix_y * img_w];
+    }
+    return column;
+}
 bool load_texture(const std::string filename, std::vector<uint32_t>& texture, size_t & text_size, size_t &text_cnt){
     int nchannels = -1, w, h;
     // 从图片加载墙面质地和怪物质地

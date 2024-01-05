@@ -35,14 +35,18 @@ void drop_ppm_image(const std::string filename, const std::vector<uint32_t> &ima
     }
     ofs.close();
 }
-std::vector<uint32_t> texture_column(const std::vector<uint32_t> &img, const size_t texsize, const size_t texid, const size_t tex_cnt ,const size_t texcorrd, const size_t column_height){
-    const size_t img_w = texsize* tex_cnt;
+std::vector<uint32_t> texture_column(const std::vector<uint32_t> &img, const size_t texsize, const size_t tex_cnt, const size_t texid ,const size_t texcorrd, const size_t column_height){
+    const size_t img_w = texsize * tex_cnt;
     const size_t img_h = texsize;
+    std::cout << img.size() << std::endl;
+    std::cout << img_w << std::endl;
+    std::cout << img_h << std::endl;
     assert(img.size() == img_w * img_h && texcorrd < texsize && texid < tex_cnt);
     std::vector<uint32_t> column(column_height);
     for(size_t y = 0; y < column_height; ++y){
         // 依次前进，将质地图片对应的那一竖列每一个像素点的颜色复制到column数组
         size_t pix_x = texid * texsize + texcorrd;
+        // 将这一列缩放到column_height的长度
         size_t pix_y = (y * texsize) / column_height;
         column[y] = img[pix_x + pix_y * img_w];
     }
@@ -61,7 +65,7 @@ bool load_texture(const std::string filename, std::vector<uint32_t>& texture, si
         stbi_image_free(pixmap);
         return false;
     }
-    text_cnt = w/h; // 有多少个质地
+    text_cnt = w / h; // 有多少个质地
     text_size = w / text_cnt; // 一个质地的大小
     if(w != h * int(text_cnt)){
         std::cerr << "Error: texture files must be N square textures packed horizontally." << std::endl;
@@ -76,7 +80,6 @@ bool load_texture(const std::string filename, std::vector<uint32_t>& texture, si
             uint8_t b = pixmap[(i + j * w) * 4 + 2];
             uint8_t a = pixmap[(i + j * w) * 4 + 3];
             texture[i + j * w] = pack_color(r, g, b, a);
-
         }
     }
     stbi_image_free(pixmap);
@@ -208,13 +211,11 @@ int main()
             draw_rectangle(framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, walltext[texid * walltext_size]);
         }
     }
-
     for (size_t i=0; i<win_w/2; i++) { // draw the visibility cone AND the "3D" view
         float angle = player_a-sightAngle/2 + sightAngle*i/float(win_w/2);
         for (float t=0; t<20; t+=.01) {
             float cx = player_x + t*cos(angle);
             float cy = player_y + t*sin(angle);
-
             size_t pix_x = cx*rect_w;
             size_t pix_y = cy*rect_h;
             framebuffer[pix_x + pix_y*win_w] = pack_color(160, 160, 160); // this draws the visibility cone
@@ -223,16 +224,30 @@ int main()
                size_t texid = map[int(cx)+int(cy)*map_w] - '0';
                 assert(texid<walltext_cnt);
                 size_t column_height = win_h/(t*cos(angle-player_a));
-                draw_rectangle(framebuffer, win_w, win_h, win_w/2+i, win_h/2-column_height/2, 1, column_height, walltext[texid*walltext_size]);
+                // 两个值包含了cx和cy的小数部分，-0.5到0.5
+                float hitx = cx - floor(cx+.5);
+                float hity = cy - floor(cy+.5);
+                int x_texcoord = hitx * walltext_size; // 计算应该fetch哪一列
+                if(std::abs(hity) > std::abs(hitx)){
+                    // 遇到的是垂直的墙，相对与地图来说,应该用 hit_y来计算列数
+                    x_texcoord = hity * walltext_size;
+                }
+                if(x_texcoord  < 0){
+                    // 记得处理negative的情况
+                    x_texcoord += walltext_size;
+                }
+                assert(x_texcoord >= 0 && x_texcoord < (int)walltext_size);
+                std::vector<uint32_t>column = texture_column(walltext, walltext_size, walltext_cnt, texid, x_texcoord, column_height);
+                pix_x = win_w / 2 + i; // 像素图上面的x坐标
+                for(size_t j = 0; j < column_height; ++j){
+                    pix_y = j + (win_h - column_height) / 2;
+                    if(pix_y < 0 || pix_y > (int)win_h)
+                    continue;
+                    framebuffer[pix_x + pix_y * win_w] = column[j];
+                }
+                // draw_rectangle(framebuffer, win_w, win_h, win_w/2+i, win_h/2-column_height/2, 1, column_height, walltext[texid*walltext_size]);
                 break;
             }
-        }
-    }
-
-    const size_t texid = 4; // draw the 4th texture on the screen
-    for (size_t i=0; i<walltext_size; i++) {
-        for (size_t j=0; j<walltext_size; j++) {
-            framebuffer[i+j*win_w] = walltext[i + texid*walltext_size + j*walltext_size*walltext_cnt];
         }
     }
     drop_ppm_image("./out.ppm", framebuffer, win_w, win_h);

@@ -21,6 +21,8 @@ Texture::Texture(const std::string filename) : img_w(0), img_h(0), count(0), siz
     }
     count = w / h; // 有多少个质地
     size = w / count; // 一个质地的大小
+    img_w = w;
+    img_h = h;
     if(w != h * int(count)){
         std::cerr << "Error: texture files must be N square textures packed horizontally." << std::endl;
         stbi_image_free(pixmap);

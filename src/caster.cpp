@@ -12,6 +12,7 @@
 #include "framebuffer.h"
 #include "textures.h"
 #include "utils.h"
+#include "caster.h"
 /// @brief 返回对应质地里对应的列数
 /// @param x 
 /// @param y 
@@ -80,7 +81,15 @@ void draw_monster(Monster &monster, std::vector<float> &depth_buffer, std::vecto
 /// @param map 
 /// @param player 
 /// @param textures 
-void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::vector<Monster>& monsters, Texture &tex_monst){
+void render(FramBuffer &fb, GameState &gs){
+    Map &map                     = gs.map;
+    Player &player               = gs.player;
+    std::vector<Monster> &monsters = gs.monsters;
+    Texture &tex_walls           = gs.tex_walls;
+    Texture &tex_monst           = gs.tex_monst;
+    // 每一条ray的最远距离（打到墙的距离）,最开始设置一个很小的值表示还没有遇到障碍
+    std::vector<float>depth_buffer(fb.w / 2, 1e3);
+    std::vector<float>monst_depthBufferr(fb.w / 2, 1e3);
     fb.clear(pack_color(255, 255, 255)); // 清空图片
     const size_t rect_w = fb.w / (map.w * 2);
     const size_t rect_h = fb.h / map.h; // 一个地图方块对应的像素图里面的宽和高
@@ -91,14 +100,11 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::ve
             size_t rect_x = i * rect_w;
             size_t rect_y = j * rect_h;
             size_t texid = map.get(i, j);
-            assert(texid < textures.count);
+            assert(texid < tex_walls.count);
             // 选择texid的质地的左上方的像素的颜色
-            fb.draw_rectangle(rect_x, rect_y, rect_w, rect_h, textures.get(0, 0, texid));
+            fb.draw_rectangle(rect_x, rect_y, rect_w, rect_h, tex_walls.get(0, 0, texid));
         }
     }
-    // 每一条ray的最远距离（打到墙的距离）,最开始设置一个很小的值表示还没有遇到障碍
-    std::vector<float>depth_buffer(fb.w / 2, 1e3);
-    std::vector<float>monst_depthBufferr(fb.w / 2, 1e3);
     // 开始画视线图, i 遍历每一列
     for(size_t i = 0; i < fb.w / 2; ++i){
         // 计算角度
@@ -110,13 +116,13 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::ve
             fb.set_pixel(x * rect_w, y * rect_h, pack_color(160, 160, 160));
             if(map.is_empty(x, y)) continue;
             size_t texid = map.get(x, y);
-            assert(texid < textures.count);
+            assert(texid < tex_walls.count);
             // 使用几何关系消除鱼眼的视觉效应
             float dist = t * cos(angle - player.a);
             depth_buffer[i] = dist;
             size_t colum_height = fb.h / dist;
-            int x_texcoord = wall_x_texcoord(x, y, textures);
-            std::vector<uint32_t> column = textures.get_scaled_colum(texid, x_texcoord, colum_height);
+            int x_texcoord = wall_x_texcoord(x, y, tex_walls);
+            std::vector<uint32_t> column = tex_walls.get_scaled_colum(texid, x_texcoord, colum_height);
             // 接下来在像素图将得到的column的颜色信息显示在图片里面
             int pix_x = i + fb.w / 2;
             for(size_t j = 0; j < colum_height; ++j){
@@ -135,23 +141,24 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::ve
     }
 }
 
-int main(){
-    FramBuffer fb{1024, 512, std::vector<uint32_t>(1024*512, pack_color(255, 255, 255))};
-    Player player{3.456, 2.345, 1.523, M_PI / 3.};
-    Map map;
-    Texture tex_walls("./walltext.png");
-    Texture tex_monsts("./monsters.png");
-    if(!tex_walls.count || !tex_monsts.count){
-        std::cerr << "Failed to load textures." << std::endl;
-        return -1;
-    }
-    std::vector<Monster> monsters{ {3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1} };
-    for(size_t frame = 200; frame < 201; ++frame){
-        std::stringstream ss;
-        ss << std::setfill('0') << std::setw(5) << frame << ".ppm";
-        player.a += 2 * M_PI / 360;
-        render(fb, map, player, tex_walls, monsters, tex_monsts);
-        drop_ppm_image(ss.str(), fb.img, fb.w, fb.h);
-    }
-    return 0;
-}
+// int main(){
+//     FramBuffer fb{1024, 512, std::vector<uint32_t>(1024*512, pack_color(255, 255, 255))};
+//     Player player{3.456, 2.345, 1.523, M_PI / 3.};
+//     Map map;
+//     Texture tex_walls("./walltext.png");
+//     Texture tex_monsts("./monsters.png");
+//     if(!tex_walls.count || !tex_monsts.count){
+//         std::cerr << "Failed to load textures." << std::endl;
+//         return -1;
+//     }
+//     std::vector<Monster> monsters{ {3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1} };
+//     for(size_t frame = 200; frame < 201; ++frame){
+//         std::stringstream ss;
+//         ss << std::setfill('0') << std::setw(5) << frame <<     
+//         ".ppm";
+//         player.a += 2 * M_PI / 360;
+//         render(fb, map, player, tex_walls, monsters, tex_monsts);
+//         drop_ppm_image(ss.str(), fb.img, fb.w, fb.h);
+//     }
+//     return 0;
+// }

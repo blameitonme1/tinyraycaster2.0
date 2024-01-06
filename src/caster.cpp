@@ -6,7 +6,7 @@
 #include <cassert>
 #include <sstream>
 #include <iomanip>
-#include <Monster.h>
+#include "monster.h"
 #include "map.h"
 #include "player.h"
 #include "framebuffer.h"
@@ -41,6 +41,40 @@ void show_monster_inmap(Monster &monster, FramBuffer &fb, Map &map){
     // 画一个6像素宽高的怪物显示地图上，-3是为了取得左上角的坐标
     fb.draw_rectangle(monster.x * rect_w - 3, monster.y * rect_h - 3, 6, 6, pack_color(255, 0, 0));
 }
+/// @brief 在3d图像画出怪物
+/// @param monster 
+/// @param fb 
+/// @param player 
+/// @param tex_monster 
+void draw_monster(Monster &monster, std::vector<float> &depth_buffer, std::vector<float> &monst_depthBuffer, FramBuffer &fb, Player &player, Texture &tex_monster){
+    // 怪物和player的连线和x轴的夹角
+    float monst_dir = atan2(monster.y - player.y, monster.x - player.x);
+    // 确保范围在-pi 到 pi
+    while(monst_dir - player.a > M_PI) monst_dir -= 2 * M_PI;
+    while (monst_dir - player.a < -M_PI) monst_dir += 2*M_PI;
+    float monster_dist = std::sqrt(pow(player.x - monster.x, 2) + pow(player.y - monster.y, 2));
+    // 计算monster显示的大小，最大设置为2000，防止过于大
+    size_t monst_screensize = std::min(2000, static_cast<int>(fb.h / monster_dist));
+    // 计算horizontal偏移量，根据几何关系很容易得到
+    int h_offset = (monst_dir - player.a) * (fb.w / 2) / (player.sightAngle) + (fb.w) / 2 - monst_screensize / 2;
+    int v_offset = fb.h / 2 - monst_screensize / 2;
+    for(size_t i = 0; i < monst_screensize; ++i){
+        if(h_offset + int(i) < 0 || h_offset + i > fb.w / 2) continue;
+        if(depth_buffer[h_offset + i] < monster_dist) continue; // 这个怪物被墙挡住了，不画出来
+        if(monst_depthBuffer[h_offset + i] < monster_dist) continue; // 这个怪物这一列被其他怪物挡住了，不画出来
+        monst_depthBuffer[h_offset + i] = monster_dist; // 更新当前这一列的最短距离
+        for(size_t j = 0; j < monst_screensize; ++j){
+            if(v_offset + int(j) < 0 || v_offset+j >= fb.h) continue;
+            uint32_t color = tex_monster.get(i * tex_monster.size / monst_screensize, j * tex_monster.size / monst_screensize, monster.texid);
+            uint8_t r, g, b, a;
+            unpack_color(color, r, g, b, a);
+            if(a > 128){
+                // 满足透明度，就设置像素
+                fb.set_pixel(fb.w / 2 + h_offset + i, v_offset + j, color);
+            }
+        }
+    }
+}
 /// @brief 根据invariance画出图像
 /// @param fb 
 /// @param map 
@@ -62,6 +96,9 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::ve
             fb.draw_rectangle(rect_x, rect_y, rect_w, rect_h, textures.get(0, 0, texid));
         }
     }
+    // 每一条ray的最远距离（打到墙的距离）,最开始设置一个很小的值表示还没有遇到障碍
+    std::vector<float>depth_buffer(fb.w / 2, 1e3);
+    std::vector<float>monst_depthBufferr(fb.w / 2, 1e3);
     // 开始画视线图, i 遍历每一列
     for(size_t i = 0; i < fb.w / 2; ++i){
         // 计算角度
@@ -76,6 +113,7 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::ve
             assert(texid < textures.count);
             // 使用几何关系消除鱼眼的视觉效应
             float dist = t * cos(angle - player.a);
+            depth_buffer[i] = dist;
             size_t colum_height = fb.h / dist;
             int x_texcoord = wall_x_texcoord(x, y, textures);
             std::vector<uint32_t> column = textures.get_scaled_colum(texid, x_texcoord, colum_height);
@@ -90,8 +128,10 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::ve
             break; // 因为遇到了墙，此时不能继续前进
         }
     }
+    // 先画墙再画怪物就可以避免怪物明明应该被挡住但是被画出来了
     for(size_t i = 0; i < monsters.size(); ++i){
         show_monster_inmap(monsters[i], fb, map);
+        draw_monster(monsters[i], depth_buffer,monst_depthBufferr, fb, player, tex_monst);
     }
 }
 
@@ -105,8 +145,8 @@ int main(){
         std::cerr << "Failed to load textures." << std::endl;
         return -1;
     }
-    std::vector<Monster> monsters{ {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1} };
-    for(size_t frame = 0; frame < 360; ++frame){
+    std::vector<Monster> monsters{ {3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1} };
+    for(size_t frame = 200; frame < 201; ++frame){
         std::stringstream ss;
         ss << std::setfill('0') << std::setw(5) << frame << ".ppm";
         player.a += 2 * M_PI / 360;

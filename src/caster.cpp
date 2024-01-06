@@ -6,7 +6,7 @@
 #include <cassert>
 #include <sstream>
 #include <iomanip>
-
+#include <Monster.h>
 #include "map.h"
 #include "player.h"
 #include "framebuffer.h"
@@ -31,12 +31,22 @@ int wall_x_texcoord(const float x, const float y, Texture &texWall){
     assert(texcoord >= 0 && texcoord < (int)texWall.size);
     return texcoord;
 }
+/// @brief 在地图显示怪物坐标
+/// @param monster 
+/// @param fb 
+/// @param map 
+void show_monster_inmap(Monster &monster, FramBuffer &fb, Map &map){
+    const size_t rect_w = fb.w / (map.w * 2);
+    const size_t rect_h = fb.h / map.h;
+    // 画一个6像素宽高的怪物显示地图上，-3是为了取得左上角的坐标
+    fb.draw_rectangle(monster.x * rect_w - 3, monster.y * rect_h - 3, 6, 6, pack_color(255, 0, 0));
+}
 /// @brief 根据invariance画出图像
 /// @param fb 
 /// @param map 
 /// @param player 
 /// @param textures 
-void render(FramBuffer &fb, Map &map, Player &player, Texture &textures){
+void render(FramBuffer &fb, Map &map, Player &player, Texture &textures, std::vector<Monster>& monsters, Texture &tex_monst){
     fb.clear(pack_color(255, 255, 255)); // 清空图片
     const size_t rect_w = fb.w / (map.w * 2);
     const size_t rect_h = fb.h / map.h; // 一个地图方块对应的像素图里面的宽和高
@@ -56,7 +66,7 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures){
     for(size_t i = 0; i < fb.w / 2; ++i){
         // 计算角度
         float angle = player.a - player.sightAngle/2 + player.sightAngle * i / float(fb.w / 2);
-        for(size_t t = 0; t < 20; t += 0.01){
+        for(float t = 0; t < 20; t += 0.01){
             float x = player.x + t * cos(angle);
             float y = player.y + t * sin(angle);
             // 画出视线图
@@ -65,7 +75,8 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures){
             size_t texid = map.get(x, y);
             assert(texid < textures.count);
             // 使用几何关系消除鱼眼的视觉效应
-            size_t colum_height = fb.h / (t * cos(angle - player.a));
+            float dist = t * cos(angle - player.a);
+            size_t colum_height = fb.h / dist;
             int x_texcoord = wall_x_texcoord(x, y, textures);
             std::vector<uint32_t> column = textures.get_scaled_colum(texid, x_texcoord, colum_height);
             // 接下来在像素图将得到的column的颜色信息显示在图片里面
@@ -79,6 +90,9 @@ void render(FramBuffer &fb, Map &map, Player &player, Texture &textures){
             break; // 因为遇到了墙，此时不能继续前进
         }
     }
+    for(size_t i = 0; i < monsters.size(); ++i){
+        show_monster_inmap(monsters[i], fb, map);
+    }
 }
 
 int main(){
@@ -86,15 +100,17 @@ int main(){
     Player player{3.456, 2.345, 1.523, M_PI / 3.};
     Map map;
     Texture tex_walls("./walltext.png");
-    if(!tex_walls.count){
+    Texture tex_monsts("./monsters.png");
+    if(!tex_walls.count || !tex_monsts.count){
         std::cerr << "Failed to load textures." << std::endl;
         return -1;
     }
+    std::vector<Monster> monsters{ {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1} };
     for(size_t frame = 0; frame < 360; ++frame){
         std::stringstream ss;
         ss << std::setfill('0') << std::setw(5) << frame << ".ppm";
         player.a += 2 * M_PI / 360;
-        render(fb, map, player, tex_walls);
+        render(fb, map, player, tex_walls, monsters, tex_monsts);
         drop_ppm_image(ss.str(), fb.img, fb.w, fb.h);
     }
     return 0;

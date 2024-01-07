@@ -10,7 +10,7 @@
 /// @param y 
 /// @param color 
 void FramBuffer::set_pixel(const size_t x, const size_t y, const uint32_t color){
-    std::cout << x << ' ' << y << std::endl;
+    //std::cout << x << ' ' << y << std::endl;
     assert(img.size() == w * h && x < w && y < h);
     img[x + y * w] = color;
 }

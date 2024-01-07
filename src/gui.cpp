@@ -49,6 +49,7 @@ int main()
     auto t1 = std::chrono::high_resolution_clock::now();
     while (1)
     {
+        std::cout << "again" << std::endl;
         // 捕获gui的事件
         {
             // 至少20毫秒渲染一次画面

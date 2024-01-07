@@ -10,6 +10,7 @@
 Texture::Texture(const std::string filename, const uint32_t format) : img_w(0), img_h(0), count(0), size(0),img(){
     SDL_Surface *tmp = SDL_LoadBMP(filename.c_str());
     if (!tmp) {
+        std::cout << filename.c_str() << std::endl;
         std::cerr << "Error in SDL_LoadBMP: " << SDL_GetError() << std::endl;
         return;
     }

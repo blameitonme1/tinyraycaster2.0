@@ -16,6 +16,6 @@ struct GameState
     Texture tex_monst;
 };
 
-void render(FramBuffer &fb, const GameState &gs);
+void render(FramBuffer &fb, GameState &gs);
 
 #endif

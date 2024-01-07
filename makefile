@@ -1,14 +1,14 @@
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall
-LDFLAGS =   # 根据你的实际需要添加链接库
+LDFLAGS = -lSDL2  # 添加SDL的链接库
 
 SRCDIR = src
 BINDIR = bin
 
-SOURCES = caster.cpp framebuffer.cpp map.cpp textures.cpp utils.cpp
+SOURCES = caster.cpp framebuffer.cpp gui.cpp map.cpp textures.cpp utils.cpp
 OBJECTS = $(patsubst %.cpp,$(BINDIR)/%.o,$(SOURCES))
 
-EXECUTABLE = $(BINDIR)/caster
+EXECUTABLE = $(BINDIR)/gui
 
 all: $(EXECUTABLE)
 
